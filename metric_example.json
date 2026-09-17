@@ -1,0 +1,5 @@
+{
+    "line_coverage": 0.80, // Ejemplo: Valor mínimo que debe alcanzarse para éxito
+    "branch_coverage": 0.50, // Ejemplo: Valor mínimo que debe alcanzarse para éxito
+    "mutation_score": 0.50 // Ejemplo: Valor mínimo que debe alcanzarse para éxito
+}
