@@ -10,6 +10,15 @@ import cosmic_ray
 
 load_dotenv()
 
+# -- -- FUNCIONES AUXILIARES -----------------------------
+
+def check_gemini_api_key():
+    api_key = os.getenv("GEMINI_API_KEY")
+    if not api_key:
+        print("Error: No se encontró la variable GEMINI_API_KEY en el entorno.")
+        sys.exit(1)
+    return api_key
+
 def metric_values_are_optimal(metric_file_path):
     """
     METRICAS IDEALES PARA EL PROYECTO
@@ -36,6 +45,7 @@ def metric_values_are_optimal(metric_file_path):
         print(f"Error al leer el archivo: {e}")
         sys.exit(1)
 
+# -- -- FUNCIONES PRINCIPALES 1 -----------------------------
 
 def read_file_content(file_path):
     try:
@@ -48,12 +58,43 @@ def read_file_content(file_path):
         print(f"Error al leer el archivo: {e}")
         sys.exit(1)
 
-def check_gemini_api_key():
-    api_key = os.getenv("GEMINI_API_KEY")
-    if not api_key:
-        print("Error: No se encontró la variable GEMINI_API_KEY en el entorno.")
+def generar_tests(contenido_archivo):
+    api_key = check_gemini_api_key()
+    client = genai.Client()
+
+    prompt = f"""
+    Eres un agente experto en testing automático. 
+    A partir del siguiente contenido de código fuente, genera tests unitarios en Python utilizando pytest.
+
+    Contenido del archivo:
+    {contenido_archivo}
+    
+    Devuelve solo el código de los tests generados sin explicaciones adicionales.
+    """
+
+    try:
+        chat = client.chats.create(model="gemini-3.1-flash-lite")
+        response = chat.send_message(prompt)
+        return response.text
+    except Exception as e:
+        print(f"Error al comunicarse con la API de Gemini: {e}")
         sys.exit(1)
-    return api_key
+
+def almacenar_tests(tests_generados, output_folder):
+    if not os.path.exists(output_folder):
+        os.makedirs(output_folder)
+
+    output_file_path = os.path.join(output_folder, "generated_tests.py")
+    
+    try:
+        with open(output_file_path, 'w', encoding='utf-8') as file:
+            file.write(tests_generados)
+        print(f"Tests generados y almacenados en: {output_file_path}")
+    except Exception as e:
+        print(f"Error al escribir el archivo de tests: {e}")
+        sys.exit(1)
+# -- -- FUNCIONES PRINCIPALES 2 -----------------------------
+
 
 """
 MAIN PARA TAREA
@@ -91,9 +132,14 @@ def main(ruta_archivo, output_folder):
     # =====================================================================
 
     # 1. Leer el contenido del archivo obtenido por ruta_archivo
+    contenido_archivo = read_file_content(ruta_archivo)
+
     # 1.1 Pedir a la IA (gemini) que desarrolle tests a partir de ese contenido
+    tests_generados = generar_tests(contenido_archivo)
 
     # 2. Almacenar tests unitarios en la ruta de output_folder en un único archivo 
+    almacenar_tests(tests_generados, output_folder)
+
     # 2.1 Calcular metricas de cobertura y mutación de los tests generados
     # 2.2 Guardar métricas en un archivo de salida (ej. metrics.json) dentro de output_folder (seguir la estructura de metric_example.json)
 
