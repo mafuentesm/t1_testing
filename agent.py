@@ -2,13 +2,66 @@ import argparse
 import os
 import sys
 from dotenv import load_dotenv
-from google import genai
+from google import genai # Para uso de API de Gemini
+# Para testing
+import pytest
+import coverage
+import cosmic_ray
 
 load_dotenv()
 
+def metric_values_are_optimal(metric_file_path):
+    """
+    METRICAS IDEALES PARA EL PROYECTO
+    {
+    "line_coverage": 0.80,
+    "branch_coverage": 0.50,
+    "mutation_score": 0.50}
+    """
+    try:
+        with open(metric_file_path, 'r', encoding='utf-8') as file:
+            metrics = eval(file.read())
+            line_coverage = metrics.get("line_coverage", 0)
+            branch_coverage = metrics.get("branch_coverage", 0)
+            mutation_score = metrics.get("mutation_score", 0)
+
+            if line_coverage >= 0.80 and branch_coverage >= 0.50 and mutation_score >= 0.50:
+                return True
+            else:
+                return False
+    except FileNotFoundError:
+        print(f"Error: No se encontró el archivo de métricas en la ruta especificada: {metric_file_path}")
+        sys.exit(1)
+    except Exception as e:
+        print(f"Error al leer el archivo: {e}")
+        sys.exit(1)
+
+
+def read_file_content(file_path):
+    try:
+        with open(file_path, 'r', encoding='utf-8') as file:
+            return file.read()
+    except FileNotFoundError:
+        print(f"Error: No se encontró el archivo en la ruta especificada: {file_path}")
+        sys.exit(1)
+    except Exception as e:
+        print(f"Error al leer el archivo: {e}")
+        sys.exit(1)
+
+def check_gemini_api_key():
+    api_key = os.getenv("GEMINI_API_KEY")
+    if not api_key:
+        print("Error: No se encontró la variable GEMINI_API_KEY en el entorno.")
+        sys.exit(1)
+    return api_key
+
+"""
+MAIN PARA TAREA
+"""
+
 def main(ruta_archivo, output_folder):
 
-    api_key = os.getenv("GEMINI_API_KEY")
+    api_key = check_gemini_api_key()
     if not api_key:
         print("Error: No se encontró la variable GEMINI_API_KEY en el entorno.")
         sys.exit(1)
@@ -17,12 +70,10 @@ def main(ruta_archivo, output_folder):
     print(f"Ruta del archivo: {ruta_archivo}")
     print(f"Directorio de salida: {output_folder}")
 
-    # El cliente detecta automáticamente la API key desde las variables de entorno
     client = genai.Client()
 
-    # =====================================================================
-    # EJEMPLO DE USO DE LA API (Ejemplo Genérico) 
-    # =====================================================================
+    # -------- EJEMPLO DE USO DE LA API (Ejemplo Genérico) -----------------
+
     print("\n[Ejemplo] Consultando a Gemini Flash Lite 3.1...")
     try:
         prompt_ejemplo = f"Analiza la siguiente ruta de archivo para pruebas: {ruta_archivo}. Responde brevemente con un saludo y el rol que cumplirás como agente de testing."
@@ -36,8 +87,18 @@ def main(ruta_archivo, output_folder):
         sys.exit(1)
 
     # =====================================================================
-    # BORRAR DESPUÉS DE PRUEBAS
+    # Tarea
     # =====================================================================
+
+    # 1. Leer el contenido del archivo obtenido por ruta_archivo
+    # 1.1 Pedir a la IA (gemini) que desarrolle tests a partir de ese contenido
+
+    # 2. Almacenar tests unitarios en la ruta de output_folder en un único archivo 
+    # 2.1 Calcular metricas de cobertura y mutación de los tests generados
+    # 2.2 Guardar métricas en un archivo de salida (ej. metrics.json) dentro de output_folder (seguir la estructura de metric_example.json)
+
+    # 3. Evaluar si las métricas cumplen con los valores ideales (line_coverage >= 0.80, branch_coverage >= 0.50, mutation_score >= 0.50)
+    # 3.1 Si cumplen, finalizar el proceso y mostrar mensaje de éxito
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Agente basado en LLM para generación iterativa de tests.")
