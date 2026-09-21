@@ -1,1 +1,5 @@
 .env
+Results_smoke/
+test_agent_paths.py
+__pycache__
+.coverage
