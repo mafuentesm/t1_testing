@@ -19,6 +19,7 @@ from cosmic_ray.work_db import WorkDB, use_db
 
 # COMENTAR
 import subprocess
+import time
 
 load_dotenv()
 
@@ -457,6 +458,8 @@ e.g. python agent.py /Users/admin/t1_testing/Public_Proyects/gin_rummy/base.py /
 """
 
 def main(ruta_archivo, output_folder):
+    # COMENTAR
+    t_inicio_total = time.perf_counter()
 
     api_key = check_gemini_api_key()
         
@@ -487,7 +490,11 @@ def main(ruta_archivo, output_folder):
     # =====================================================================
 
     contenido_archivo = read_file_content(ruta_archivo) # 1. Leer el contenido del archivo obtenido por ruta_archivo
+    # COMENTAR
+    t_inicio_gen = time.perf_counter()
     tests_generados = generar_tests(contenido_archivo, ruta_archivo) # 1.1 Pedir a la IA (gemini) que desarrolle tests a partir de ese contenido
+    # COMENTAR
+    print(f"Tiempo creación tests (inicial): {time.perf_counter() - t_inicio_gen:.2f} s")
     almacenar_tests(tests_generados, ruta_archivo, output_folder) # 1.2. Almacenar tests unitarios en la ruta de output_folder en un único archivo
 
     # 2 Calcular metricas de cobertura y mutación de los tests generados
@@ -534,7 +541,11 @@ def main(ruta_archivo, output_folder):
             almacenar_metricas(metrics, output_folder)
 
         print(f"Iteración {iteration + 1}/{max_iterations}: refinando suite con Gemini...")
+        # COMENTAR
+        t_inicio_iter = time.perf_counter()
         tests_generados = corregir_tests_con_gemini(tests_generados, error_log, metrics, ruta_archivo, contenido_archivo)
+        # COMENTAR
+        print(f"Tiempo corrección tests (iteración {iteration + 1}): {time.perf_counter() - t_inicio_iter:.2f} s")
         almacenar_tests(tests_generados, ruta_archivo, output_folder)
 
     # Evaluación final obligatoria post-bucle
@@ -545,6 +556,9 @@ def main(ruta_archivo, output_folder):
         print("[FINAL] Métricas consolidadas tras la última iteración.")
     else:
         print("[ADVERTENCIA] La última versión aún contiene tests fallidos.")
+
+    # COMENTAR
+    print(f"Tiempo total ejecución agente: {time.perf_counter() - t_inicio_total:.2f} s")
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Agente basado en LLM para generación iterativa de tests.")
