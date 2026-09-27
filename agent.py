@@ -128,8 +128,8 @@ def check_gemini_api_key():
 def ejecutar_llamada_gemini_robusta(
     prompt: str, 
     output_folder: str, 
-    max_reintentos: int = 4, 
-    max_espera_total_seg: int = 60
+    max_reintentos: int = 3, 
+    max_espera_total_seg: int = 120
 ) -> str:
     """
     Ejecuta llamadas al modelo de Gemini con reintentos automáticos ante 503/504.
@@ -141,14 +141,14 @@ def ejecutar_llamada_gemini_robusta(
 
     for intento in range(max_reintentos):
         try:
-            chat = client.chats.create(model="gemini-3.1-flash-lite")
+            chat = client.chats.create(model="gemini-3.5-flash-lite")
             response = chat.send_message(prompt)
             return limpiar_fences_markdown(response.text)
         except Exception as e:
             error_str = str(e)
             es_sobrecarga = any(
                 k in error_str 
-                for k in ["503", "504", "High demand", "Time budget exceeded", "ResourceExhausted", "UNAVAILABLE"]
+                for k in ["500", "503", "504", "INTERNAL", "High demand", "Time budget exceeded", "ResourceExhausted", "UNAVAILABLE"]
             )
             
             if es_sobrecarga:
@@ -227,45 +227,82 @@ Devuelve exclusivamente código Python ejecutable, sin explicaciones ni bloques 
     return ejecutar_llamada_gemini_robusta(prompt, output_folder)
 
 # COMENTAR
-def almacenar_tests(tests_generados, ruta_archivo, output_folder_path):
-    os.makedirs(output_folder_path, exist_ok=True)
-    output_file_path = resolver_test_file_path(ruta_archivo, output_folder_path)
+def almacenar_tests(tests_code: str, source_file_path: str, output_folder: str):
+    """
+    Escribe el archivo de test agregando un preámbulo dinámico que inicializa
+    el paquete y resuelve alias/imports internos de forma transparente.
+    """
+    os.makedirs(output_folder, exist_ok=True)
+    test_file_path = resolver_test_file_path(source_file_path, output_folder)
 
     project_root = os.path.dirname(os.path.abspath(__file__))
+    source_dir = os.path.dirname(os.path.abspath(source_file_path))
     public_projects_root = os.path.join(project_root, "Public_Proyects")
-    source_file_abs = os.path.abspath(ruta_archivo)
-    source_dir = os.path.dirname(source_file_abs)
-    
-    # Nombre del paquete (ej: 'tree', 'blackjack', 'mahjong')
-    rel_path = os.path.relpath(source_file_abs, public_projects_root)
-    pkg_name = rel_path.split(os.sep)[0]
 
-    # Orden crítico de sys.path:
-    # 1. public_projects_root para resolver 'import tree.base' viendo 'tree' como carpeta/paquete
-    # 2. project_root
-    # 3. source_dir al final para resolver imports planos tipo 'import utils' sin pisar el nombre del paquete
+    rel_path = os.path.relpath(source_file_path, public_projects_root)
+    partes = rel_path.split(os.sep)
+    pkg_name = partes[0] if len(partes) > 1 else ""
+    pkg_dir = os.path.join(public_projects_root, pkg_name) if pkg_name else ""
+
     setup_code = textwrap.dedent(f'''\
 import sys
 import os
-
-for p in [{public_projects_root!r}, {project_root!r}, {source_dir!r}]:
-    if p not in sys.path:
-        sys.path.insert(0, p)
-
-# Evitar colisión si existe un archivo con el mismo nombre que el directorio (ej: tree/tree.py)
+import ast
 import types
-if {pkg_name!r} not in sys.modules or not hasattr(sys.modules[{pkg_name!r}], "__path__"):
-    pkg_path = os.path.join({public_projects_root!r}, {pkg_name!r})
-    if os.path.isdir(pkg_path):
-        pkg_mod = types.ModuleType({pkg_name!r})
-        pkg_mod.__path__ = [pkg_path]
-        pkg_mod.__file__ = os.path.join(pkg_path, "__init__.py")
-        sys.modules[{pkg_name!r}] = pkg_mod
+import importlib
+
+# 1. Configuración de sys.path
+for _p in [{public_projects_root!r}, {project_root!r}, {source_dir!r}]:
+    if _p and _p not in sys.path:
+        sys.path.insert(0, _p)
+
+_curr_pkg_name = {pkg_name!r}
+_curr_pkg_dir = {pkg_dir!r}
+
+if _curr_pkg_name and os.path.isdir(_curr_pkg_dir):
+    class _DynamicPackage(types.ModuleType):
+        def __getattr__(self, name):
+            # A. Intento como submódulo hermano (ej: blackjack.dealer)
+            sub_py = os.path.join(_curr_pkg_dir, f"{{name}}.py")
+            if os.path.exists(sub_py):
+                try:
+                    mod = importlib.import_module(f"{{self.__name__}}.{{name}}")
+                    setattr(self, name, mod)
+                    return mod
+                except Exception:
+                    pass
+
+            for f in os.listdir(_curr_pkg_dir):
+                if f.endswith(".py") and not f.startswith("__"):
+                    mod_name = f[:-3]
+                    f_full = os.path.join(_curr_pkg_dir, f)
+                    try:
+                        with open(f_full, "r", encoding="utf-8") as _src:
+                            tree = ast.parse(_src.read(), filename=f_full)
+                        for node in tree.body:
+                            if isinstance(node, (ast.ClassDef, ast.FunctionDef)):
+                                if node.name == name or node.name.lower().endswith(name.lower()):
+                                    mod = importlib.import_module(f"{{self.__name__}}.{{mod_name}}")
+                                    val = getattr(mod, node.name)
+                                    setattr(self, name, val)
+                                    return val
+                    except Exception:
+                        pass
+
+            raise AttributeError(f"module {{self.__name__!r}} has no attribute {{name!r}}")
+
+    pkg_mod = _DynamicPackage(_curr_pkg_name)
+    pkg_mod.__path__ = [_curr_pkg_dir]
+    pkg_mod.__file__ = os.path.join(_curr_pkg_dir, "__init__.py")
+    sys.modules[_curr_pkg_name] = pkg_mod
 ''')
 
-    with open(output_file_path, 'w', encoding='utf-8') as file:
-        file.write(setup_code + "\n" + tests_generados.lstrip())
-    print(f"Tests generados y almacenados en: {output_file_path}")
+    final_content = setup_code + "\n" + tests_code
+
+    with open(test_file_path, "w", encoding="utf-8") as f:
+        f.write(final_content)
+
+    print(f"Tests generados y almacenados en: {test_file_path}")
 
 # COMENTAR
 def podar_suite_con_ast(test_file_path: str, max_rondas: int = 5) -> bool:
