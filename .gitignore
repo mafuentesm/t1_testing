@@ -4,4 +4,3 @@ test_agent_paths.py
 __pycache__
 .coverage
 prompts.md
-Results/
