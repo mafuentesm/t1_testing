@@ -4,24 +4,29 @@
 BASE_DIR="Public_Proyects"
 OUTPUT_BASE="Results"
 
-# Definir los proyectos y sus respectivos archivos usando un diccionario (array asociativo)
-declare -A projects
-projects[blackjack]="base.py dealer.py judger.py"
-projects[gin_rummy]="base.py action_event.py dealer.py"
-projects[mahjong]="player.py dealer.py game.py"
-projects[stock4]="tableformat.py structure.py validate.py"
-projects[svm]="base.py svm.py"
-projects[tree]="base.py tree.py"
-projects[fuzzywuzzy]="fuzz.py string_processing.py StringMatcher.py utils.py"
+# Definir los proyectos y sus archivos como "proyecto:archivos".
+# (No se usa "declare -A": el bash 3.2 de macOS no soporta arrays asociativos
+#  y todos los proyectos terminaban colapsados en el índice 0 -> Results/0/)
+projects=(
+    "blackjack:base.py dealer.py judger.py"
+    "gin_rummy:base.py action_event.py dealer.py"
+    "mahjong:player.py dealer.py game.py"
+    "stock4:tableformat.py structure.py validate.py"
+    "svm:base.py svm.py"
+    "tree:base.py tree.py"
+    "fuzzywuzzy:fuzz.py string_processing.py StringMatcher.py utils.py"
+)
 
 echo "=========================================================="
 echo "Iniciando la ejecución del Agente para proyectos públicos"
 echo "=========================================================="
 
 # Iterar sobre cada proyecto
-for project in "${!projects[@]}"; do
+for entry in "${projects[@]}"; do
+    project="${entry%%:*}"
+    files="${entry#*:}"
     # Iterar sobre cada archivo del proyecto actual
-    for file in ${projects[$project]}; do
+    for file in $files; do
         
         # Quitar la extensión .py para nombrar la carpeta de salida
         class_name="${file%.py}"
